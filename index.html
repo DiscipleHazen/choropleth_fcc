@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <style>
+            body {
+                background-color: black;
+                color: white;
+                text-align: center;
+            }
+            h2 {
+                margin-bottom: 40px;
+            }
+
+        
+        </style>
+    </head>
+    <body>
+        <h1 id="title">Educational Attainment by County in the US</h1>
+        <h2 id="description">Percentage of Adults with a Bachelors degree or higher (2010 - 2014)</h2>
+        <svg id="data"></svg>
+        <div id="tooltip"></div>
+    </body>
+</html>
+<script src="https://unpkg.com/topojson@3"></script>
+<script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    Promise.all([
+        fetch("https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json"),
+        fetch("https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/for_user_education.json")
+    ])
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(jsons => {
+
+            const w = 1000;
+            const h = 900;
+
+            const topology = jsons[0];
+            const educationData = jsons[1];
+
+            console.log(topology);
+            console.log(educationData);
+
+            const featureCollection = topojson.feature(topology, 
+            topology
+            .objects
+            .counties
+            )
+            console.log(featureCollection);
+
+            const colorScale = d3.scaleQuantize()
+                .domain([d3.min(educationData, d => d.bachelorsOrHigher),
+                    d3.max(educationData, d => d.bachelorsOrHigher)])
+                .range(d3.schemeBlues[7])
+
+            const countyId = new Map(educationData.map(d => [d.fips, d]));
+            console.log(countyId);
+
+            const path = d3.geoPath();
+
+            const usMap = d3.select('#data')
+                .attr('width', w)
+                .attr('height', h)
+            
+            const tooltip = d3.select('#tooltip')
+                                .style('position', 'absolute')
+                                .attr('width', 50)
+                                .attr('height', 50)
+                                .style('background-color', 'navy')
+                                .style('border-radius', '5px')
+                                .style('padding', '10px');
+
+            
+            usMap.append('g')
+                .selectAll('path')
+                .data(featureCollection.features)
+                .enter()
+                .append('path')
+                .attr('class', 'county')
+                .attr('d', path)
+                .attr('fill', d => {
+                    const county = countyId.get(d.id);
+                    return county ? colorScale(county.bachelorsOrHigher) : '#000';
+                })
+                .attr('stroke', 'black')
+                .attr('stroke-width', 0.2)
+                .attr('data-fips', d => d.id)
+                .attr('data-education', d => {
+                        const county = countyId.get(d.id);
+                        return county.bachelorsOrHigher;
+                })
+                .on('mouseover', function(event, d) {
+                    const county = countyId.get(d.id)
+                    tooltip
+                        .style('opacity', 0.8)
+                        .attr('data-education', countyId.get(d.id).bachelorsOrHigher)
+                        .html(`${county.area_name}, ${county.state}<br/>${county.bachelorsOrHigher.toFixed(1)}%`)
+                        .style('left', (event.pageX + 20) + 'px')
+                        .style('top', (event.pageY + 20) + 'px')
+                    
+                    d3.select(this).attr('fill', 'orange')
+                })      
+                .on('mousemove', (event) => {
+                    tooltip
+                        .style('left', (event.pageX + 20) + 'px')
+                        .style('top', (event.pageY + 20) + 'px')
+                })
+                .on('mouseout', function(event) {
+                    tooltip
+                        .style('opacity', 0)
+                    d3.select(this).attr('fill', d => {
+                    const county = countyId.get(d.id);
+                    return county ? colorScale(county.bachelorsOrHigher) : '#000';
+                })
+                })
+
+            const stateLines = topojson.mesh(topology, topology.objects.states, (a, b) => a !== b);
+
+            usMap.append('path')
+                .datum(stateLines)
+                .attr('d', path)
+                .attr('fill', 'none')
+                .attr('stroke', 'black')
+                .attr('stroke-width', 1.2)
+                
+            const legend = usMap.append('g')
+                                .attr('id', 'legend')
+                                .attr('transform', 'translate(300, 0)');
+            
+
+            const getContrast = (hex) => {
+                hex = hex.replace(/^#/, '');
+
+                const r = 255 - parseInt(hex.slice(0, 2), 16);
+                const g = 255 - parseInt(hex.slice(2, 4), 16);
+                const b = 255 - parseInt(hex.slice(4, 6), 16);
+
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+                return luminance < 150 ? '#000' : '#CCC'; 
+            }
+
+            const colors = colorScale.range()
+            const blockWidth = 60;
+            colors.forEach((color, i ) => {
+                legend.append('rect')
+                .attr('width', blockWidth)
+                .attr('height', 25)
+                .attr('x', i * blockWidth)
+                .attr('y', 0)
+                .attr('fill', color)
+                .attr('stroke', 'white');
+
+                legend.append('text')
+                .attr('x', i * blockWidth + 4)
+                .attr('y', 18)
+                .text(() => {
+                    const extent = colorScale.invertExtent(color);
+                    console.log(colorScale.invertExtent(color))
+                    const low = extent[0].toFixed(0);
+                    const high = extent[1].toFixed(0);
+                    return `${low}–${high}%`;
+                })
+                .attr('fill', getContrast(color))
+                .style('font-size', '16px');
+            })
+            
+
+
+
+
+
+
+        })
+
+        
+</script>
